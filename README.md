@@ -1,6 +1,6 @@
 # Go HTTP/RPC Server Lab
 
-A learning and testing project that exposes the same user service through four API styles: the Go standard library, Huma, schema-first OpenAPI, and ConnectRPC. All variants use `net/http.Server` and `http.ServeMux`. A fifth executable demonstrates TLS 1.3 and mTLS.
+A learning and testing project that exposes the same user service through four API styles: the Go standard library, Huma, schema-first OpenAPI, and ConnectRPC. All variants use `net/http.Server` and `http.ServeMux`. A fifth server executable demonstrates TLS 1.3 and mTLS. A client CLI exercises REST, strict mTLS, Connect, and gRPC.
 
 Use the servers as standalone processes, static binaries in test pods, or containers. They are examples with deliberate limitations, rather than a production application template.
 
@@ -24,7 +24,8 @@ go-server/
 │   ├── stdlib-tls/                 # HTTPS and mTLS example
 │   ├── huma/                       # Code-first OpenAPI 3.1 and Problem Details
 │   ├── openapi/                    # Generated strict OpenAPI server
-│   └── connect/                    # Connect, gRPC, and HTTP/JSON
+│   ├── connect/                    # Connect, gRPC, and HTTP/JSON
+│   └── client/                     # REST/mTLS and generated RPC client CLI
 ├── gen/user/v1/                     # Generated Protobuf and Connect code
 ├── internal/
 │   ├── domain/user.go              # Shared user service and domain errors
@@ -36,7 +37,7 @@ go-server/
 │   ├── kubernetes/                 # Test Deployment and Service
 │   └── tracing/                    # Jaeger and an OTLP-enabled server
 ├── .github/workflows/build.yml     # Tests and downloadable build artifacts
-├── Dockerfile                      # All five binaries in one minimal image
+├── Dockerfile                      # Five servers and the client in one minimal image
 └── Makefile
 ```
 
@@ -94,7 +95,7 @@ go install github.com/abevz/go-server/cmd/stdlib@latest
 
 ## Build standalone binaries
 
-Build all five executables for the current machine:
+Build all five servers and the client for the current machine:
 
 ```bash
 make build
@@ -110,7 +111,7 @@ GOOS=linux GOARCH=amd64 make build BINDIR=dist/linux-amd64
 GOOS=linux GOARCH=arm64 make build BINDIR=dist/linux-arm64
 ```
 
-Create an archive containing all five executables, a [binary usage guide](docs/binary-usage.md) installed as `README.md`, and both API contracts:
+Create an archive containing all five servers and the client, a [binary usage guide](docs/binary-usage.md) installed as `README.md`, and both API contracts:
 
 ```bash
 VERSION=v0.1.0 GOOS=linux GOARCH=amd64 make dist
@@ -128,7 +129,7 @@ The GitHub Actions workflow runs tests and vet, then builds Linux amd64/arm64 bi
 
 ## Build and run the container
 
-The multi-stage Dockerfile cross-compiles all five executables and copies them into a `scratch` image. The image has no shell or Go toolchain, runs as UID/GID `65532`, and includes a writable `/certs` directory for the TLS example. The build context excludes local certificates, credentials, and binary archives.
+The multi-stage Dockerfile cross-compiles the five servers and the client and copies them into a `scratch` image. The image has no shell or Go toolchain, runs as UID/GID `65532`, and includes a writable `/certs` directory for the TLS example. The build context excludes local certificates, credentials, and binary archives.
 
 ```bash
 make image
@@ -282,6 +283,69 @@ OTEL_TRACES_EXPORTER=console \
 ```
 
 The default service name is the executable's variant (`stdlib`, `huma`, and so on); `OTEL_SERVICE_NAME` overrides it. The same environment variables work in the container or in a pod. Use the collector's reachable service address inside a cluster rather than a host loopback address. See [OpenTelemetry Go exporters](https://opentelemetry.io/docs/languages/go/exporters/) for transport configuration.
+
+## Client CLI: REST, strict mTLS, gRPC, and Protobuf
+
+The `client` executable supports `get`, `list`, and `create`. Its `rest` mode works with all four REST variants, including HTTPS. It also supports `whoami` for the TLS server's `/mtls/whoami` route.
+
+| `-protocol` | Wire format | Default URL |
+| --- | --- | --- |
+| `rest` (default) | HTTP/JSON, or HTTPS when the URL starts with `https://` | `http://localhost:8081` |
+| `connect` | Connect with binary Protobuf | `http://localhost:8084` |
+| `connect-json` | Connect with ProtoJSON | `http://localhost:8084` |
+| `grpc` | gRPC with binary Protobuf over HTTP/2 | `http://localhost:8084` |
+
+Responses are printed as JSON even when the wire format is binary Protobuf. REST output follows the REST response shape; RPC output contains the `user` or `users` envelope. Diagnostics go to standard error. Exit codes are `0` for success/help, `1` for request or runtime failures, and `2` for invalid arguments. Requests default to a ten-second timeout; override it with `-timeout 3s`.
+
+### Strict mTLS client
+
+Start the server in one terminal:
+
+```bash
+MTLS_STRICT=1 go run ./cmd/stdlib-tls
+```
+
+In another terminal, present the generated client certificate and trust the server's CA:
+
+```bash
+go run ./cmd/client -protocol rest -url https://localhost:8443 \
+  -ca certs/ca.crt -cert certs/client.crt -key certs/client.key \
+  -op get -id u-1
+
+# Inspect the identity verified by the TLS server.
+go run ./cmd/client -url https://localhost:8443 \
+  -ca certs/ca.crt -cert certs/client.crt -key certs/client.key \
+  -op whoami
+```
+
+Both the CA and hostname are verified. `-cert` and `-key` must be supplied together; there is no insecure verification bypass. The same TLS options can be combined with any protocol when its endpoint uses HTTPS. A gRPC endpoint must also support HTTP/2. The lab's `connect` server uses cleartext HTTP/2 by default; `stdlib-tls` exposes REST over TLS.
+
+### gRPC and Connect clients
+
+Start `go run ./cmd/connect` in one terminal, then use the generated RPC client through the CLI:
+
+```bash
+go run ./cmd/client -protocol grpc -op get -id u-1
+go run ./cmd/client -protocol grpc -op create \
+  -name Bob -email bob@example.com -role sre
+go run ./cmd/client -protocol grpc -op list
+
+# Same generated service, binary Protobuf over Connect.
+go run ./cmd/client -protocol connect -op list
+
+# Same service using the Connect JSON codec.
+go run ./cmd/client -protocol connect-json -op get -id u-1
+```
+
+Use `-url` for a different address. For example, `go run ./cmd/client -url http://localhost:8082 -op list` targets Huma. All RPC modes use the generated messages and client in `gen/user/v1`; no manual Protobuf codec is involved. See `cmd/client/main.go` for the TLS transport configuration and typed calls.
+
+The client is included in binary archives and the container image. After publishing the source revision, it can also run without cloning:
+
+```bash
+go run github.com/abevz/go-server/cmd/client@latest -protocol grpc -op get
+# Or use the locally built executable:
+./dist/bin/client -protocol connect -op list
+```
 
 ## Generate contracts
 

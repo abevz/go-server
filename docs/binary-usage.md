@@ -1,6 +1,6 @@
 # Go HTTP/RPC Server Lab: binary bundle
 
-This bundle contains five static executables for the OS and CPU architecture in the archive name. No Go installation or C runtime is required. Use an executable that matches your machine or container architecture.
+This bundle contains five static server executables and a client CLI for the OS and CPU architecture in the archive name. No Go installation or C runtime is required. Use an executable that matches your machine or container architecture.
 
 ```text
 bin/stdlib
@@ -8,6 +8,7 @@ bin/stdlib-tls
 bin/huma
 bin/openapi
 bin/connect
+bin/client
 api/openapi.yaml
 api/proto/user/v1/user.proto
 ```
@@ -71,6 +72,32 @@ curl --cacert certs/ca.crt --cert certs/client.crt --key certs/client.key \
 ```
 
 Set `MTLS_STRICT=1` before starting the TLS executable to require a client certificate for every connection.
+
+## Use the included client
+
+For a running strict mTLS server (`MTLS_STRICT=1 ./bin/stdlib-tls`), use its generated CA and client certificate:
+
+```bash
+./bin/client -url https://localhost:8443 \
+  -ca certs/ca.crt -cert certs/client.crt -key certs/client.key \
+  -op get -id u-1
+
+./bin/client -url https://localhost:8443 \
+  -ca certs/ca.crt -cert certs/client.crt -key certs/client.key \
+  -op whoami
+```
+
+For a running `./bin/connect` server:
+
+```bash
+./bin/client -protocol grpc -op get -id u-1
+./bin/client -protocol grpc -op create -name Bob -email bob@example.com -role sre
+./bin/client -protocol grpc -op list
+./bin/client -protocol connect -op list       # Binary Protobuf over Connect.
+./bin/client -protocol connect-json -op list  # ProtoJSON over Connect.
+```
+
+The RPC modes default to `http://localhost:8084`. REST defaults to `http://localhost:8081`; `-url` overrides either address. Use `-protocol rest` (the default) for the standard REST variants. Responses are JSON on stdout; errors go to stderr with a nonzero exit status. `-timeout` defaults to `10s`, and `-help` lists all options. TLS verifies the server's certificate and hostname, and requires both `-cert` and `-key` when a client certificate is configured.
 
 ## Export request spans
 

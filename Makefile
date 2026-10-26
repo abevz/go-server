@@ -1,7 +1,7 @@
 BINDIR ?= dist/bin
 IMAGE ?= go-server:dev
 
-.PHONY: build dist image test generate check-generated run-stdlib run-stdlib-tls run-huma run-openapi run-connect
+.PHONY: build dist image test generate check-generated run-stdlib run-stdlib-tls run-huma run-openapi run-connect run-client
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$(BINDIR)/" ./cmd/...
@@ -35,3 +35,6 @@ run-openapi:
 
 run-connect:
 	go run ./cmd/connect
+
+run-client:
+	go run ./cmd/client
