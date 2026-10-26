@@ -264,14 +264,45 @@ curl -i http://localhost:8080/users/u-1
 
 The Compose example runs Jaeger 2.22.0 with transient in-memory trace storage and exports spans to `http://jaeger:4318/v1/traces`. This is a local tracing demo; its ports are bound to loopback. See the [Jaeger getting-started guide](https://www.jaegertracing.io/docs/2.22/getting-started/).
 
-For a server running directly on the host, point it at an existing collector or the Jaeger instance's published port:
+To run Jaeger on its own while starting the server directly on the host, start only the Jaeger service:
+
+```bash
+docker compose -f examples/tracing/compose.yaml up -d jaeger
+```
+
+In another terminal, enable span export for the server:
 
 ```bash
 OTEL_TRACES_EXPORTER=otlp \
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
 OTEL_SERVICE_NAME=go-server-stdlib \
+OTEL_BSP_SCHEDULE_DELAY=1000 \
 go run ./cmd/stdlib
 ```
+
+Send a request to this host process on port 8081:
+
+```bash
+curl -i http://localhost:8081/users/u-1
+```
+
+### Find and read a span in Jaeger
+
+Open `http://localhost:16686`, choose **Service → go-server-stdlib**, and click **Find Traces**. Open a trace, then select its server span to inspect the timeline and attributes. Allow a few seconds after making the request: spans are exported after completion through a batch processor.
+
+For a successful request, expect an entry such as `GET /users/{id}`:
+
+- The span name uses the matched route template; `url.path` contains the actual path, such as `/users/u-1`.
+- The HTTP method and status identify the operation and response, for example `GET` and `200`.
+- **Duration** measures the instrumented server work. A value of `257 µs`, for example, is about `0.257 ms`.
+- `network.protocol.version` shows the negotiated HTTP version, such as `1.1` or `2`.
+- `span.kind=server` identifies an incoming request span. Resource attributes describe the service and SDK; request attributes describe this particular call.
+
+The response's `X-Trace-Id` correlates the request with its access log and exported trace. A trace ID in the response confirms that a trace context exists; seeing the trace in Jaeger confirms export and ingestion.
+
+A trace with one server span is expected in the current example. The in-memory user service does not create business-operation spans, and the client CLI does not create client spans. A deeper timeline requires additional instrumentation around those operations.
+
+### Exporter settings
 
 `OTEL_EXPORTER_OTLP_ENDPOINT` is a base URL; the HTTP exporter appends `/v1/traces`. To provide a complete trace URL instead, use `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`. The SDK also reads resource attributes, sampling, and batch processor settings, for example:
 
