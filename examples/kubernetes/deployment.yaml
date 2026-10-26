@@ -1,0 +1,80 @@
+# Build go-server:dev and load it into every test-cluster node before applying.
+# Replace the image and pull policy when using a published registry image.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: go-server
+  template:
+    metadata:
+      labels:
+        app: go-server
+    spec:
+      terminationGracePeriodSeconds: 15
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          image: go-server:dev
+          imagePullPolicy: Never
+          # Use /usr/local/bin/huma, openapi, connect, or stdlib-tls to switch.
+          command: ["/usr/local/bin/stdlib"]
+          env:
+            - name: ADDR
+              value: ":8080"
+            - name: CERT_DIR
+              value: /certs
+            # To export spans, add OTEL_TRACES_EXPORTER=otlp and set
+            # OTEL_EXPORTER_OTLP_ENDPOINT to your collector's HTTP base URL.
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 2
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: certs
+              mountPath: /certs
+      volumes:
+        - name: certs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-server
+spec:
+  selector:
+    app: go-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

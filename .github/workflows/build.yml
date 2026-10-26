@@ -1,0 +1,50 @@
+name: Build test artifacts
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go test -race ./...
+      - run: go vet ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Package static Linux binaries
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+        run: make dist
+      - name: Build image without publishing
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          docker build --platform "linux/$TARGET_ARCH" -t "go-server:ci-$TARGET_ARCH" .
+          docker save "go-server:ci-$TARGET_ARCH" | gzip > "dist/go-server-image_linux_$TARGET_ARCH.tar.gz"
+          cd dist
+          sha256sum "go-server-image_linux_$TARGET_ARCH.tar.gz" > "go-server-image_linux_$TARGET_ARCH.tar.gz.sha256"
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: go-server-linux-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error

@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package user.v1;
+
+option go_package = "github.com/abevz/go-server/gen/user/v1;userv1";
+
+// UserService provides dual-protocol RPC (gRPC binary for cluster peers + HTTP/JSON for browsers/curl).
+service UserService {
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+}
+
+message User {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  string role = 4;
+  string created_at = 5;
+}
+
+message GetUserRequest {
+  string id = 1;
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message CreateUserRequest {
+  // Business validation is performed by UserService after decoding.
+  string name = 1;
+  string email = 2;
+  string role = 3;
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+message ListUsersRequest {}
+
+message ListUsersResponse {
+  repeated User users = 1;
+}

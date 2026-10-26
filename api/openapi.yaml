@@ -1,0 +1,112 @@
+openapi: 3.0.3
+info:
+  title: User API (Schema-First OpenAPI)
+  version: 1.0.0
+paths:
+  /users:
+    get:
+      operationId: ListUsers
+      summary: List all users
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: CreateUser
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Request body exceeds 1 MiB
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /users/{id}:
+    get:
+      operationId: GetUser
+      summary: Get user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    User:
+      type: object
+      required: [id, name, email, role, created_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    CreateUserRequest:
+      type: object
+      additionalProperties: false
+      required: [name, email]
+      properties:
+        name:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
