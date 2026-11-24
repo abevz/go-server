@@ -91,9 +91,12 @@ func NewHTTPServer(addr string, handler http.Handler) *http.Server {
 		Protocols:         &protocols,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		MaxHeaderBytes:    1 << 20, // 1 MB
+		// user.proto only defines unary RPCs. For server- or bidirectional-streaming RPCs,
+		// a 15s WriteTimeout would abort active streams and must be disabled for streaming
+		// handlers (via http.ResponseController.SetWriteDeadline or a separate server).
+		WriteTimeout:   15 * time.Second,
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1 MB
 	}
 }
 
