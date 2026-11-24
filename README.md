@@ -401,7 +401,7 @@ The OpenAPI server uses a generated `StrictServerInterface` and request validati
 
 ## Exercise each API
 
-Every process starts with user `u-1` (`Aleksey`). The server middleware returns `X-Trace-Id`, accepts W3C `traceparent`, and writes structured access logs.
+Every process starts with user `u-1` (`Aleksey`). `GET /users` and `ListUsers` return users sorted by the numeric part of their ID (`u-2` before `u-10`), breaking ties by ID. The server middleware returns `X-Trace-Id`, accepts W3C `traceparent`, and writes structured access logs.
 
 ### Standard library REST API: port 8081
 
@@ -425,6 +425,8 @@ curl -i -X POST http://localhost:8081/users \
   -H 'Content-Type: application/json' \
   -d '{"name":"Bob","email":"bob@example.com","role":"sre"}'
 ```
+
+`POST /users` rejects unknown fields, malformed JSON, and trailing data or additional JSON values with `400`, and request bodies over 1 MiB with `413`.
 
 ### TLS 1.3, HTTP/2, and mTLS: port 8443
 

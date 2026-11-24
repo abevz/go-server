@@ -126,6 +126,8 @@ func TestStdlibTLSAndMTLS(t *testing.T) {
 			status int
 		}{
 			{"malformed JSON", `{"name":`, http.StatusBadRequest},
+			{"trailing garbage", `{"name":"Ann","email":"a@b.c"}garbage`, http.StatusBadRequest},
+			{"multiple JSON objects", `{"name":"Ann","email":"a@b.c"}{"name":"Bob","email":"b@b.c"}`, http.StatusBadRequest},
 			{"unknown field", `{"name":"Alice","email":"alice@example.com","extra":true}`, http.StatusBadRequest},
 			{"invalid user", `{"name":"A","email":"invalid"}`, http.StatusBadRequest},
 			{"oversized body", `{"name":"` + strings.Repeat("x", maxBodyBytes) + `"}`, http.StatusRequestEntityTooLarge},

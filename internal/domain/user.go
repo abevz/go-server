@@ -1,9 +1,12 @@
 package domain
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -113,5 +116,32 @@ func (s *UserService) ListUsers(ctx context.Context) ([]User, error) {
 	for _, u := range s.users {
 		out = append(out, u)
 	}
+	slices.SortFunc(out, func(a, b User) int {
+		na, oka := userIDNumber(a.ID)
+		nb, okb := userIDNumber(b.ID)
+		if oka && okb {
+			if c := cmp.Compare(na, nb); c != 0 {
+				return c
+			}
+		} else if oka != okb {
+			if oka {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
 	return out, nil
+}
+
+func userIDNumber(id string) (int, bool) {
+	_, numStr, ok := strings.Cut(id, "-")
+	if !ok {
+		return 0, false
+	}
+	n, err := strconv.Atoi(numStr)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
